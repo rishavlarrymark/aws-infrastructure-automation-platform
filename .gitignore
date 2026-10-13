@@ -1,6 +1,47 @@
-.terraform/
+
+# Terraform working directories
+**/.terraform/*
+
+# Terraform state and backups
 *.tfstate
 *.tfstate.*
+*.tfstate.backup
+
+# Terraform crash logs
+crash.log
+crash.*.log
+
+# Local variable files and sensitive overrides
 *.tfvars
-tfplan
+*.tfvars.json
+!*.example.tfvars
+!*.example.tfvars.json
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+
+# Keep the dependency lock file under version control
+# Do not ignore .terraform.lock.hcl
+
+# Application environment variables and secrets
 .env
+.env.*
+!.env.example
+
+# Python virtual environments and cache
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+
+# Logs and temporary files
+*.log
+tmp/
+temp/
+
+# Editor and operating-system files
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
