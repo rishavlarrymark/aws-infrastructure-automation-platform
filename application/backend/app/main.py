@@ -218,3 +218,6 @@ def dashboard(db: Session = Depends(get_db)):
             "long_term_goals": [g for g in goal_summaries if g["goal_type"] == models.GoalType.long_term][:4]}
 
 app.include_router(api)
+
+from app.auth_routes import router as auth_router
+app.include_router(auth_router)

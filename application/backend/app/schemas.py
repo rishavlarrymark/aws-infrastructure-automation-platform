@@ -1,6 +1,7 @@
 from datetime import date, datetime
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 from app.models import TaskStatus, Priority, GoalType, GoalStatus
+from pydantic import EmailStr
 
 class TaskBase(BaseModel):
     title: str = Field(min_length=1, max_length=180)
@@ -82,3 +83,47 @@ class MilestoneOut(MilestoneBase):
     goal_id: int
     created_at: datetime
     model_config = ConfigDict(from_attributes=True)
+
+
+
+
+
+
+
+class RegisterRequest(BaseModel):
+    full_name: str = Field(min_length=2, max_length=120)
+    email: EmailStr
+    password: str = Field(min_length=8, max_length=128)
+
+    @field_validator("full_name")
+    @classmethod
+    def validate_full_name(cls, value: str) -> str:
+        value = value.strip()
+        if len(value) < 2:
+            raise ValueError("Name must contain at least 2 characters")
+        return value
+
+
+class LoginRequest(BaseModel):
+    email: EmailStr
+    password: str = Field(min_length=1, max_length=128)
+
+
+class GoogleLoginRequest(BaseModel):
+    credential: str = Field(min_length=1, max_length=8192)
+
+
+class UserOut(BaseModel):
+    id: int
+    full_name: str
+    email: EmailStr
+    is_active: bool
+    created_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class TokenOut(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+    user: UserOut
