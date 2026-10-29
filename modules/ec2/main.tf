@@ -76,14 +76,11 @@ resource "aws_instance" "this" {
     ManagedBy = "Terraform"
   })
 
-# Application deployment configuration.
-# The backend path and ASGI entry point match the repository structure.
-# Update these values if the application layout changes.
+  # Application deployment configuration.
+  # The backend path and ASGI entry point match the repository structure.
+  # Update these values if the application layout changes.
 
-user_data = templatefile("${path.module}/../../application/startup.sh", {
-  app_repo_url        = var.app_repo_url
-  app_repo_branch     = var.app_repo_branch
-})
+
 
 
   lifecycle {

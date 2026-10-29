@@ -29,32 +29,43 @@ variable "ec2_instance_type" {
   default     = "t3.micro"
 }
 
-variable "app_repo_url" {
-  description = "Git repository URL containing the application."
+variable "aws_region" {
+  description = "AWS region containing the ECR repository."
+  type        = string
+  default     = "ap-south-1"
+}
+
+variable "ecr_registry" {
+  description = "Amazon ECR registry URL."
   type        = string
 
   validation {
-    condition     = length(trimspace(var.app_repo_url)) > 0
-    error_message = "The application repository URL must not be empty."
+    condition     = length(trimspace(var.ecr_registry)) > 0
+    error_message = "The ECR registry URL must not be empty."
   }
 }
 
-variable "app_repo_branch" {
-  description = "Application branch to deploy."
+variable "image_name" {
+  description = "Docker application image repository name."
   type        = string
-  default     = "main"
+  default     = "task-management-api"
 }
 
-variable "app_subdirectory" {
-  description = "Relative path to the backend application."
+variable "image_tag" {
+  description = "Docker application image tag to deploy."
   type        = string
-  default     = "application/backend"
+  default     = "v1"
 }
 
-variable "app_module" {
-  description = "Python module and ASGI application object."
-  type        = string
-  default     = "app.main:app"
+variable "application_port" {
+  description = "Host port exposed for the application."
+  type        = number
+  default     = 8000
+
+  validation {
+    condition     = var.application_port >= 1 && var.application_port <= 65535
+    error_message = "Application port must be between 1 and 65535."
+  }
 }
 
 

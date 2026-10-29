@@ -40,17 +40,6 @@ variable "alb_security_group_id" {
   type        = string
 }
 
-variable "application_port" {
-  description = "Port on which the application listens."
-  type        = number
-  default     = 8000
-
-  validation {
-    condition     = var.application_port >= 1 && var.application_port <= 65535
-    error_message = "Application port must be between 1 and 65535."
-  }
-}
-
 variable "ssh_allowed_cidrs" {
   description = "Approved IPv4 CIDRs allowed to connect through SSH."
   type        = set(string)
@@ -115,29 +104,3 @@ variable "tags" {
   type        = map(string)
   default     = {}
 }
-
-variable "app_repo_url" {
-  description = "Git repository URL containing the application."
-  type        = string
-}
-
-variable "app_repo_branch" {
-  description = "Git branch used for the initial application deployment."
-  type        = string
-  default     = "main"
-}
-
-
-
-
-# variable "app_subdirectory" {
-#   description = "Relative path to the backend directory inside the repository."
-#   type        = string
-#   default     = "application/backend"
-# }
-
-# variable "app_module" {
-#   description = "Python module and ASGI application object for Uvicorn."
-#   type        = string
-#   default     = "app.main:app"
-# }

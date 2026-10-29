@@ -25,8 +25,8 @@ module "ec2_engine" {
   subnet_id = var.subnet_id
 
   # Compute
-  ami_id        = var.ec2_ami_id
-  instance_type = var.ec2_instance_type
+  ec2_ami_id        = var.ec2_ami_id
+  ec2_instance_type = var.ec2_instance_type
 
   # Existing IAM instance profile
   iam_instance_profile = var.iam_instance_profile
@@ -47,14 +47,16 @@ module "ec2_engine" {
 
   # Bootstrap
   user_data = templatefile(
-    "${path.root}/../../application/startup.sh",
+    "${path.root}/../../ec2/user_data.sh",
     {
-      app_repo_url     = var.app_repo_url
-      app_repo_branch  = var.app_repo_branch
-      app_subdirectory = var.app_subdirectory
-      app_module       = var.app_module
+      aws_region       = var.aws_region
+      ecr_registry     = var.ecr_registry
+      image_name       = var.image_name
+      image_tag        = var.image_tag
+      application_port = var.application_port
     }
   )
+
   tags = local.common_tags
 }
 
