@@ -16,7 +16,7 @@ output "s3_bucket_arn" {
 
 output "iam_role_name" {
   description = "Name of the IAM role for S3 read access."
-  value       = module.iam_s3_read_role.role_name
+  value       = module.iam_security.role_name
 }
 
 
@@ -35,7 +35,7 @@ output "public_subnet_ids" {
 
 output "private_subnet_ids" {
   description = "IDs of the private subnets."
-  value       = module.vpc.private_subnet_ids
+  value       = module.vpc.application_subnet_ids
 }
 
 output "igw_id" {

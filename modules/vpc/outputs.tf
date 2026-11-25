@@ -5,13 +5,18 @@ output "vpc_id" {
 }
 
 output "public_subnet_ids" {
-  description = "List of public subnet IDs."
+  description = "IDs of public subnets across the configured Availability Zones."
   value       = aws_subnet.public[*].id
 }
 
-output "private_subnet_ids" {
-  description = "List of private subnet IDs."
-  value       = aws_subnet.private[*].id
+output "application_subnet_ids" {
+  description = "IDs of isolated private application subnets across the configured Availability Zones."
+  value       = aws_subnet.application[*].id
+}
+
+output "database_subnet_ids" {
+  description = "IDs of isolated private database subnets across the configured Availability Zones."
+  value       = aws_subnet.database[*].id
 }
 
 output "igw_id" {
@@ -19,9 +24,9 @@ output "igw_id" {
   value       = aws_internet_gateway.this.id
 }
 
-output "web_security_group_id" {
+output "alb_security_group_id" {
   description = "Security group ID for public-facing resources."
-  value       = aws_security_group.web_sg.id
+  value       = aws_security_group.alb_sg.id
 }
 
 output "public_subnet_az_mapping" {

@@ -9,9 +9,20 @@ variable "vpc_id" {
   type        = string
 }
 
+variable "alb_security_group_id" {
+  description = "Security Group ID of the Application Load Balancer."
+  type        = string
+}
+
 variable "subnet_id" {
   description = "ID of the existing private subnet."
   type        = string
+}
+
+variable "associate_public_ip_address" {
+  description = "Whether to associate a public IPv4 address with the EC2 instance."
+  type        = bool
+  default     = false
 }
 
 variable "ec2_ami_id" {
@@ -35,9 +46,15 @@ variable "iam_instance_profile" {
   type        = string
 }
 
-variable "alb_security_group_id" {
-  description = "Security group ID of the ALB allowed to access the application."
-  type        = string
+# variable "alb_security_group_id" {
+#   description = "Security group ID of the ALB allowed to access the application."
+#   type        = string
+# }
+
+variable "application_port" {
+  description = "Port on which the application listens."
+  type        = number
+  default     = 8000
 }
 
 variable "ssh_allowed_cidrs" {

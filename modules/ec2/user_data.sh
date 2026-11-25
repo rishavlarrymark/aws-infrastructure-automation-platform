@@ -1,3 +1,4 @@
+
 #!/bin/bash
 set -Eeuo pipefail
 
@@ -20,13 +21,13 @@ dnf install -y docker awscli-2
 systemctl enable --now docker
 
 # Authenticate with Amazon ECR
-aws ecr get-login-password --region "$AWS_REGION" \
+aws ecr get-login-password --region "$${AWS_REGION}" \
   | docker login \
       --username AWS \
-      --password-stdin "$ECR_REGISTRY"
+      --password-stdin "$${ECR_REGISTRY}"
 
 # Pull the application image
-docker pull "${ECR_REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG}"
+docker pull "$${ECR_REGISTRY}/$${IMAGE_NAME}:$${IMAGE_TAG}"
 
 # Remove the previous container if it exists
 docker rm -f task-management-api || true
@@ -35,8 +36,8 @@ docker rm -f task-management-api || true
 docker run -d \
   --name task-management-api \
   --restart unless-stopped \
-  -p "${APP_PORT}:8000" \
-  "${ECR_REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG}"
+  -p "$${APP_PORT}:8000" \
+  "$${ECR_REGISTRY}/$${IMAGE_NAME}:$${IMAGE_TAG}"
 
 # Verify container startup
 sleep 3

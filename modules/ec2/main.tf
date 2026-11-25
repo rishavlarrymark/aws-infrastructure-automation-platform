@@ -11,6 +11,7 @@ resource "aws_security_group" "ec2_sg" {
   })
 }
 
+
 # Allow HTTP traffic only from the Application Load Balancer.
 
 resource "aws_vpc_security_group_ingress_rule" "http_from_alb" {
@@ -25,6 +26,7 @@ resource "aws_vpc_security_group_ingress_rule" "http_from_alb" {
   to_port     = var.application_port
 }
 
+
 # Allow outbound traffic for updates, AWS APIs, and application dependencies.
 
 resource "aws_vpc_security_group_egress_rule" "all_ipv4" {
@@ -34,6 +36,7 @@ resource "aws_vpc_security_group_egress_rule" "all_ipv4" {
   cidr_ipv4   = "0.0.0.0/0"
   ip_protocol = "-1"
 }
+
 
 # EC2 Instance
 

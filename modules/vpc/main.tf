@@ -1,10 +1,15 @@
+# ===================
+# CURRENT AWS REGION
+# ===================
 
-# Current AWS Region
 data "aws_region" "current" {}
 
-# VPC — Core Network Foundation
-resource "aws_vpc" "this" {
-  cidr_block           = var.cidr_block
+# ===================
+# VPC CONFIGURATION
+# ===================
+
+resource "aws_vpc" "main" {
+  cidr_block           = var.vpc_cidr_block
   enable_dns_support   = true
   enable_dns_hostnames = true
 
@@ -13,74 +18,84 @@ resource "aws_vpc" "this" {
   })
 }
 
-# Public Subnets
+
+# ======================
+# SUBNET CONFIGURATION
+# ======================
+
+# PUBLIC SUBNETS
+
 resource "aws_subnet" "public" {
   count = length(var.availability_zones)
 
   vpc_id                  = aws_vpc.this.id
-  cidr_block              = cidrsubnet(var.cidr_block, 4, count.index)
+  cidr_block              = cidrsubnet(var.vpc_cidr_block, 8, count.index + 1)
   availability_zone       = var.availability_zones[count.index]
   map_public_ip_on_launch = true
 
   tags = merge(var.tags, {
     Name = "${var.name}-public-${count.index + 1}"
     Type = "public"
+    Tier = "public"
   })
 }
 
-# Private Subnets
-resource "aws_subnet" "private" {
+
+# PRIVATE APPLICATION SUBNETS
+
+resource "aws_subnet" "application" {
   count = length(var.availability_zones)
 
-  vpc_id = aws_vpc.this.id
-  cidr_block = cidrsubnet(
-    var.cidr_block,
-    4,
-    count.index + length(var.availability_zones)
-  )
+  vpc_id            = aws_vpc.this.id
+  cidr_block        = cidrsubnet(var.vpc_cidr_block, 8, count.index + 11)
   availability_zone = var.availability_zones[count.index]
 
   tags = merge(var.tags, {
-    Name = "${var.name}-private-${count.index + 1}"
-    Type = "private"
+    Name = "${var.name}-application-${count.index + 1}"
+    Type = "application"
+    Tier = "application"
   })
 }
 
-# Internet Gateway
-resource "aws_internet_gateway" "this" {
-  vpc_id = aws_vpc.this.id
+
+# PRIVATE DATABASE SUBNETS
+
+resource "aws_subnet" "database" {
+  count = length(var.availability_zones)
+
+  vpc_id            = aws_vpc.this.id
+  cidr_block        = cidrsubnet(var.vpc_cidr_block, 8, count.index + 21)
+  availability_zone = var.availability_zones[count.index]
+
+  tags = merge(var.tags, {
+    Name = "${var.name}-database-${count.index + 1}"
+    Type = "database"
+    Tier = "database"
+  })
+}
+
+
+# ===============================
+# INTERNET GATEWAY CONFIGURATION
+# ===============================
+
+resource "aws_internet_gateway" "main" {
+  vpc_id = aws_vpc.main.id
 
   tags = merge(var.tags, {
     Name = "${var.name}-igw"
   })
 }
 
-# Public Route Table
-resource "aws_route_table" "public" {
-  vpc_id = aws_vpc.this.id
 
-  tags = merge(var.tags, {
-    Name = "${var.name}-public-rt"
-  })
-}
+# ===========================
+# NAT GATEWAY CONFIGURATION
+# ===========================
 
-# Public Internet Route
-resource "aws_route" "public_internet" {
-  route_table_id         = aws_route_table.public.id
-  destination_cidr_block = "0.0.0.0/0"
-  gateway_id             = aws_internet_gateway.this.id
-}
+# NAT GATEWAY ELASTIC IP
 
-# Public Route Table Associations
-resource "aws_route_table_association" "public" {
-  count = length(aws_subnet.public)
-
-  subnet_id      = aws_subnet.public[count.index].id
-  route_table_id = aws_route_table.public.id
-}
-
-# NAT Gateway Elastic IP
 resource "aws_eip" "nat" {
+  count  = 1
   domain = "vpc"
 
   tags = merge(var.tags, {
@@ -88,48 +103,133 @@ resource "aws_eip" "nat" {
   })
 }
 
-# NAT Gateway — Single NAT for Cost Efficiency
-resource "aws_nat_gateway" "this" {
+
+# NAT GATEWAY
+
+resource "aws_nat_gateway" "main" {
   allocation_id = aws_eip.nat.id
   subnet_id     = aws_subnet.public[0].id
 
-  depends_on = [aws_internet_gateway.this]
+  depends_on = [
+    aws_internet_gateway.main,
+    aws_route.public_internet,
+    aws_route_table_association.public
+  ]
 
   tags = merge(var.tags, {
     Name = "${var.name}-nat"
   })
 }
 
-# Private Route Table
-resource "aws_route_table" "private" {
-  vpc_id = aws_vpc.this.id
+
+# ===========================
+# ROUTE TABLE CONFIGURATION
+# ===========================
+# Creates separate routing tables for public, application, and database subnets.
+
+# PUBLIC ROUTE TABLE
+
+resource "aws_route_table" "public" {
+  vpc_id = aws_vpc.main.id
 
   tags = merge(var.tags, {
-    Name = "${var.name}-private-rt"
+    Name = "${var.name}-public-rt"
+    Type = "public"
   })
 }
 
-# Private Internet Route Through NAT
-resource "aws_route" "private_internet" {
-  route_table_id         = aws_route_table.private.id
+
+# PRIVATE APPLICATION ROUTE TABLE
+
+resource "aws_route_table" "application" {
+  vpc_id = aws_vpc.main.id
+
+  tags = merge(var.tags, {
+    Name = "${var.name}-application-rt"
+    Type = "application"
+  })
+}
+
+
+# PRIVATE DATABASE ROUTE TABLE (LOCAL ROUTE ONLY)
+
+resource "aws_route_table" "database" {
+  vpc_id = aws_vpc.main.id
+
+  tags = merge(var.tags, {
+    Name = "${var.name}-database-rt"
+    Type = "database"
+  })
+}
+
+
+# =====================
+# ROUTE CONFIGURATION
+# =====================
+# Adds routing rules to route tables to control where network traffic is forwarded.
+
+# PUBLIC INTERNET ROUTE
+
+resource "aws_route" "public_internet" {
+  route_table_id         = aws_route_table.public.id
   destination_cidr_block = "0.0.0.0/0"
-  nat_gateway_id         = aws_nat_gateway.this.id
+  gateway_id             = aws_internet_gateway.main.id
 }
 
-# Private Route Table Associations
-resource "aws_route_table_association" "private" {
-  count = length(aws_subnet.private)
 
-  subnet_id      = aws_subnet.private[count.index].id
-  route_table_id = aws_route_table.private.id
+# PRIVATE APPLICATION INTERNET ROUTE THROUGH NAT
+
+resource "aws_route" "private_internet" {
+  route_table_id         = aws_route_table.application.id
+  destination_cidr_block = "0.0.0.0/0"
+  nat_gateway_id         = aws_nat_gateway.main.id
 }
 
-# Web Security Group
-# Use this for public HTTP/HTTPS-facing resources only.
-resource "aws_security_group" "web_sg" {
-  name        = "${var.name}-web-sg"
+
+# ======================================
+# ROUTE TABLE ASSOCIATION CONFIGURATION
+# ======================================
+
+# ASSOCIATE PUBLIC SUBNETS WITH THE PUBLIC ROUTE TABLE
+
+resource "aws_route_table_association" "public" {
+  count = length(aws_subnet.public)
+
+  subnet_id      = aws_subnet.public[count.index].id
+  route_table_id = aws_route_table.public.id
+}
+
+
+# ASSOCIATE PRIVATE APPLICATION SUBNETS WITH THE APPLICATION ROUTE TABLE
+
+resource "aws_route_table_association" "application" {
+  count = length(aws_subnet.application)
+
+  subnet_id      = aws_subnet.application[count.index].id
+  route_table_id = aws_route_table.application.id
+}
+
+
+# ASSOCIATE PRIVATE DATABASE SUBNETS WITH THE DATABASE ROUTE TABLE
+
+resource "aws_route_table_association" "database" {
+  count = length(aws_subnet.database)
+
+  subnet_id      = aws_subnet.database[count.index].id
+  route_table_id = aws_route_table.database.id
+}
+
+
+# =============================
+# SECURITY GROUP CONFIGURATION
+# =============================
+
+# Use this for public ALB HTTP/HTTPS-facing resources only.
+
+resource "aws_security_group" "alb_sg" {
+  name        = "${var.name}-alb-sg"
   description = "Allow public HTTP and HTTPS traffic"
-  vpc_id      = aws_vpc.this.id
+  vpc_id      = aws_vpc.main.id
 
   ingress {
     description = "HTTP"
@@ -148,28 +248,44 @@ resource "aws_security_group" "web_sg" {
   }
 
   egress {
-    description = "Outbound IPv4 traffic"
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
-    cidr_blocks = ["0.0.0.0/0"]
+    description     = "Allow traffic to application instances"
+    from_port       = 8000
+    to_port         = 8000
+    protocol        = "tcp"
+    security_groups = [aws_security_group.ec2_sg.id]
   }
 
   tags = merge(var.tags, {
-    Name = "${var.name}-web-sg"
+    Name = "${var.name}-alb-sg"
   })
 }
 
-# Public Network ACL
+
+# ==================================================
+# NETWORK ACCESS CONTROL LIST (NACL) CONFIGURATION
+# ==================================================
+
+# ===========================
+# PUBLIC NACL CONFIGURATION
+# ===========================
+
+# PUBLIC NACL
+
 resource "aws_network_acl" "public" {
-  vpc_id = aws_vpc.this.id
+  vpc_id = aws_vpc.main.id
 
   tags = merge(var.tags, {
     Name = "${var.name}-public-nacl"
   })
 }
 
-# NACL Inbound HTTP
+
+# ==========================
+# PUBLIC NACL INBOUND RULES
+# ==========================
+
+# HTTP INBOUND RULE
+
 resource "aws_network_acl_rule" "public_in_http" {
   network_acl_id = aws_network_acl.public.id
   rule_number    = 100
@@ -181,7 +297,8 @@ resource "aws_network_acl_rule" "public_in_http" {
   to_port        = 80
 }
 
-# NACL Inbound HTTPS
+# HTTPS INBOUND RULE
+
 resource "aws_network_acl_rule" "public_in_https" {
   network_acl_id = aws_network_acl.public.id
   rule_number    = 110
@@ -193,7 +310,8 @@ resource "aws_network_acl_rule" "public_in_https" {
   to_port        = 443
 }
 
-# NACL Inbound Ephemeral Ports — Return Traffic
+# EPHEMERAL PORT INBOUND RULE
+
 resource "aws_network_acl_rule" "public_in_ephemeral" {
   network_acl_id = aws_network_acl.public.id
   rule_number    = 120
@@ -205,17 +323,57 @@ resource "aws_network_acl_rule" "public_in_ephemeral" {
   to_port        = 65535
 }
 
-# NACL Outbound All IPv4
-resource "aws_network_acl_rule" "public_out_all" {
+# ============================
+# PUBLIC NACL OUTBOUND RULES
+# ============================
+
+# ALB TO APPLICATION SUBNETS
+
+resource "aws_network_acl_rule" "public_out_application" {
+  count = length(var.app_subnet_cidrs)
+
   network_acl_id = aws_network_acl.public.id
-  rule_number    = 100
+  rule_number    = 100 + count.index
   egress         = true
-  protocol       = "-1"
+  protocol       = "tcp"
   rule_action    = "allow"
-  cidr_block     = "0.0.0.0/0"
+  cidr_block     = var.app_subnet_cidrs[count.index]
+  from_port      = 8000
+  to_port        = 8000
 }
 
-# Associate Public Subnets with Public NACL
+# NAT GATEWAY OUTBOUND HTTPS
+
+resource "aws_network_acl_rule" "public_out_https" {
+  network_acl_id = aws_network_acl.public.id
+  rule_number    = 110
+  egress         = true
+  protocol       = "tcp"
+  rule_action    = "allow"
+  cidr_block     = "0.0.0.0/0"
+  from_port      = 443
+  to_port        = 443
+}
+
+# EPHEMERAL PORT OUTBOUND RULE
+
+resource "aws_network_acl_rule" "public_out_ephemeral" {
+  network_acl_id = aws_network_acl.public.id
+  rule_number    = 120
+  egress         = true
+  protocol       = "tcp"
+  rule_action    = "allow"
+  cidr_block     = "0.0.0.0/0"
+  from_port      = 1024
+  to_port        = 65535
+}
+
+# =======================================
+# PUBLIC NACL ASSOCIATION CONFIGURATION
+# =======================================
+
+# PUBLIC SUBNET NACL ASSOCIATIONS
+
 resource "aws_network_acl_association" "public" {
   count = length(aws_subnet.public)
 
@@ -223,15 +381,191 @@ resource "aws_network_acl_association" "public" {
   network_acl_id = aws_network_acl.public.id
 }
 
-# S3 Gateway VPC Endpoint
+
+# ===============================
+# APPLICATION NACL CONFIGURATION
+# ===============================
+
+# APPLICATION NACL
+
+resource "aws_network_acl" "application" {
+  vpc_id = aws_vpc.main.id
+
+  tags = merge(var.tags, {
+    Name = "${var.name}-application-nacl"
+  })
+}
+
+# ===============================
+# APPLICATION NACL INBOUND RULES
+# ===============================
+
+# ALLOW ALB TRAFFIC TO FASTAPI APPLICATION ON PORT 8000
+
+resource "aws_network_acl_rule" "application_in_alb" {
+  count = length(var.public_subnet_cidrs)
+
+  network_acl_id = aws_network_acl.application.id
+  rule_number    = 100 + count.index
+  egress         = false
+  protocol       = "tcp"
+  rule_action    = "allow"
+  cidr_block     = var.public_subnet_cidrs[count.index]
+  from_port      = 8000
+  to_port        = 8000
+}
+
+# ALLOW EPHEMERAL RETURN TRAFFIC FROM DATABASE AND EXTERNAL SERVICES
+
+resource "aws_network_acl_rule" "application_in_ephemeral" {
+  network_acl_id = aws_network_acl.application.id
+  rule_number    = 110
+  egress         = false
+  protocol       = "tcp"
+  rule_action    = "allow"
+  cidr_block     = "0.0.0.0/0"
+  from_port      = 1024
+  to_port        = 65535
+}
+
+# ================================
+# APPLICATION NACL OUTBOUND RULES
+# ================================
+
+# ALLOW POSTGRESQL TRAFFIC TO DATABASE SUBNETS
+
+resource "aws_network_acl_rule" "application_out_database" {
+  count = length(var.db_subnet_cidrs)
+
+  network_acl_id = aws_network_acl.application.id
+  rule_number    = 100 + count.index
+  egress         = true
+  protocol       = "tcp"
+  rule_action    = "allow"
+  cidr_block     = var.db_subnet_cidrs[count.index]
+  from_port      = 5432
+  to_port        = 5432
+}
+
+# ALLOW OUTBOUND HTTPS THROUGH NAT GATEWAY
+
+resource "aws_network_acl_rule" "application_out_https" {
+  network_acl_id = aws_network_acl.application.id
+  rule_number    = 110
+  egress         = true
+  protocol       = "tcp"
+  rule_action    = "allow"
+  cidr_block     = "0.0.0.0/0"
+  from_port      = 443
+  to_port        = 443
+}
+
+# ALLOW EPHEMERAL RETURN TRAFFIC TO PUBLIC SUBNETS
+
+resource "aws_network_acl_rule" "application_out_ephemeral" {
+  count = length(var.public_subnet_cidrs)
+
+  network_acl_id = aws_network_acl.application.id
+  rule_number    = 120 + count.index
+  egress         = true
+  protocol       = "tcp"
+  rule_action    = "allow"
+  cidr_block     = var.public_subnet_cidrs[count.index]
+  from_port      = 1024
+  to_port        = 65535
+}
+
+# ==============================
+# APPLICATION NACL ASSOCIATIONS
+# ==============================
+
+# PRIVATE APPLICATION-SUBNET NACL ASSOCIATIONS
+
+resource "aws_network_acl_association" "application" {
+  count = length(aws_subnet.application)
+
+  subnet_id      = aws_subnet.application[count.index].id
+  network_acl_id = aws_network_acl.application.id
+}
+
+# =============================
+# DATABASE NACL CONFIGURATION
+# =============================
+
+# DATABASE NACL
+
+resource "aws_network_acl" "database" {
+  vpc_id = aws_vpc.main.id
+
+  tags = merge(var.tags, {
+    Name = "${var.name}-database-nacl"
+  })
+}
+
+# ============================
+# DATABASE NACL INBOUND RULES
+# ============================
+
+# ALLOW POSTGRESQL TRAFFIC FROM APPLICATION SUBNETS
+
+resource "aws_network_acl_rule" "database_in_application" {
+  count = length(var.app_subnet_cidrs)
+
+  network_acl_id = aws_network_acl.database.id
+  rule_number    = 100 + count.index
+  egress         = false
+  protocol       = "tcp"
+  rule_action    = "allow"
+  cidr_block     = var.app_subnet_cidrs[count.index]
+  from_port      = 5432
+  to_port        = 5432
+}
+
+# ============================
+# DATABASE NACL OUTBOUND RULES
+# ============================
+
+# ALLOW EPHEMERAL RETURN TRAFFIC TO APPLICATION SUBNETS
+
+resource "aws_network_acl_rule" "database_out_application" {
+  count = length(var.app_subnet_cidrs)
+
+  network_acl_id = aws_network_acl.database.id
+  rule_number    = 100 + count.index
+  egress         = true
+  protocol       = "tcp"
+  rule_action    = "allow"
+  cidr_block     = var.app_subnet_cidrs[count.index]
+  from_port      = 1024
+  to_port        = 65535
+}
+
+# ============================
+# DATABASE NACL ASSOCIATIONS
+# ============================
+
+# PRIVATE DATABASE-SUBNET NACL ASSOCIATIONS
+
+resource "aws_network_acl_association" "database" {
+  count = length(aws_subnet.database)
+
+  subnet_id      = aws_subnet.database[count.index].id
+  network_acl_id = aws_network_acl.database.id
+}
+
+
+# ============================
+# VPC ENDPOINT CONFIGURATION
+# ============================
+
+# S3 GATEWAY VPC ENDPOINT
+
 resource "aws_vpc_endpoint" "s3" {
-  vpc_id            = aws_vpc.this.id
-  service_name      = "com.amazonaws.${data.aws_region.current.region}.s3"
+  vpc_id            = aws_vpc.main.id
+  service_name      = "com.amazonaws.${data.aws_region.current.name}.s3"
   vpc_endpoint_type = "Gateway"
 
-  route_table_ids = [
-    aws_route_table.private.id
-  ]
+  route_table_ids = [aws_route_table.application.id]
 
   tags = merge(var.tags, {
     Name = "${var.name}-s3-endpoint"
